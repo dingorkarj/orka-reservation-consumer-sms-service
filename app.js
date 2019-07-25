@@ -38,4 +38,46 @@ app.use(function(err, req, res, next) {
   res.render('error');
 });
 
+//kafka consumer subscribed to phoneNumber topic
+//request for sms delivery
+var kafka = require('kafka-node'),
+    Consumer = kafka.Consumer,
+    Offset = kafka.Offset,
+    client = new kafka.KafkaClient({kafkaHost: process.env.KAFKAHOST}),
+    offset = new Offset(client),
+    consumer = new Consumer(
+        client,
+        [
+          { topic: process.env.RESERVE_APP_SMS_TOPIC_NAME, partition: 0 }
+        ],
+        {
+          autoCommit: false
+        }
+    );
+
+consumer.on("message", function (message) {
+  console.log(message);
+});
+
+consumer.on('error', function (err) {
+  console.log('error', err);
+});
+
+process.on("SIGINT", function() {
+  consumer.close(true, function() {
+    process.exit();
+  });
+});
+
+consumer.on('offsetOutOfRange', function (topic) {
+  topic.maxNum = 2;
+  offset.fetch([topic], function (err, offsets) {
+    if (err) {
+      return console.error(err);
+    }
+    var min = Math.min.apply(null, offsets[topic.topic][topic.partition]);
+    consumer.setOffset(topic.topic, topic.partition, min);
+  });
+});
+
 module.exports = app;
