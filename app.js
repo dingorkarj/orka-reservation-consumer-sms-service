@@ -38,8 +38,17 @@ app.use(function(err, req, res, next) {
   res.render('error');
 });
 
-//kafka consumer subscribed to phoneNumber topic
-//request for sms delivery
+//Twilio configuration
+var twilioConfig = {
+  accSID : process.env.TWILIO_ACC_SID,
+  authToken : process.env.TWILIO_AUTH_TOKEN,
+    from: '+16474963397',
+    messageBody: ':\n\nCongratulations!\nYou might win a free Tim Hortons gift card; we will update you soon in a week.\n\nThank you for visiting.\n\nJayprasad Dingorkar.'
+};
+
+const twilioClient = require('twilio')(twilioConfig.accSID, twilioConfig.authToken);
+
+//Setup Kafka consumer subscribed to phoneNumber topic
 var kafka = require('kafka-node'),
     Consumer = kafka.Consumer,
     Offset = kafka.Offset,
@@ -55,8 +64,16 @@ var kafka = require('kafka-node'),
         }
     );
 
-consumer.on("message", function (message) {
-  console.log(message);
+//Send request to Twilio for SMS, when Kafka message is received
+consumer.on("message", function (kafkaMessage) {
+  console.log(kafkaMessage);
+    twilioClient.messages
+        .create({
+            body: twilioConfig.messageBody,
+            from: twilioConfig.from,
+            to: kafkaMessage.value
+        })
+        .then(message => console.log(message.sid));
 });
 
 consumer.on('error', function (err) {
